@@ -1,5 +1,6 @@
 <?php
-include 'connect.php';
+include 'auth.php';
+require_login();
 $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

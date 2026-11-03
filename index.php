@@ -1,4 +1,4 @@
-<?php include 'connect.php'; ?>
+<?php include 'auth.php'; require_login(); ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,6 +12,7 @@
   <div class="container">
     <a class="navbar-brand" href="index.php">Playbook</a>
     <a class="btn btn-success" href="reserve.php">Reserve a Court</a>
+    <a class="btn btn-outline-light" href="logout.php">Log Out</a>
   </div>
 </nav>
 
