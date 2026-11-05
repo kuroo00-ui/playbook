@@ -8,24 +8,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $email = trim($_POST['email']);
   $pass  = $_POST['password'];
 
-  // 1. Find the user by email
+
   $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
   $stmt->bind_param("s", $email);
   $stmt->execute();
   $user = $stmt->get_result()->fetch_assoc();
 
-  // 2. Does the user exist AND does the password match the hash?
   if ($user && password_verify($pass, $user['password_hash'])) {
 
-    // 3. Save who they are in the session
+    
     session_regenerate_id(true);
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['role']    = $user['role'];
     $_SESSION['name']    = $user['first_name'];
 
-    // 4. Send them to the right page
+   
     if ($user['role'] === 'admin') {
-      header("Location: admin_dashboard.php");
+      header("Location: admin_approvals.php");
     } elseif ($user['role'] === 'staff') {
       header("Location: staff_dashboard.php");
     } else {
