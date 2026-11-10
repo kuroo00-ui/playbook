@@ -34,9 +34,11 @@
     </tbody>
   </table>
 
-  <h4 class="mt-4">My Reservations</h4>
+    <h4 class="mt-4">My Reservations</h4>
   <table class="table table-bordered bg-white">
-    <thead><tr><th>Court</th><th>Date</th><th>Time</th><th>Purpose</th><th>Status</th></tr></thead>
+    <thead>
+      <tr><th>Court</th><th>Date</th><th>Time</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
+    </thead>
     <tbody>
     <?php
       $stmt = $conn->prepare(
@@ -46,14 +48,24 @@
       $stmt->bind_param("i", $_SESSION['user_id']);
       $stmt->execute();
       $res = $stmt->get_result();
-      while ($r = $res->fetch_assoc()) {
-        echo "<tr><td>" . htmlspecialchars($r['court_name']) . "</td>"
-           . "<td>{$r['reservation_date']}</td>"
-           . "<td>" . substr($r['start_time'],0,5) . " - " . substr($r['end_time'],0,5) . "</td>"
-           . "<td>" . htmlspecialchars($r['purpose']) . "</td>"
-           . "<td>{$r['status']}</td></tr>";
-      }
+      while ($r = $res->fetch_assoc()):
     ?>
+      <tr>
+        <td><?= htmlspecialchars($r['court_name']) ?></td>
+        <td><?= $r['reservation_date'] ?></td>
+        <td><?= substr($r['start_time'], 0, 5) ?> - <?= substr($r['end_time'], 0, 5) ?></td>
+        <td><?= htmlspecialchars($r['purpose']) ?></td>
+        <td><?= $r['status'] ?></td>
+        <td>
+          <?php if (in_array($r['status'], ['pending', 'approved'])): ?>
+            <form method="POST" action="cancel.php" onsubmit="return confirm('Cancel this reservation?')">
+              <input type="hidden" name="reservation_id" value="<?= $r['reservation_id'] ?>">
+              <button class="btn btn-danger btn-sm">Cancel</button>
+            </form>
+          <?php endif; ?>
+        </td>
+      </tr>
+    <?php endwhile; ?>
     </tbody>
   </table>
 </div>
