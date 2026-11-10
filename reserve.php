@@ -37,17 +37,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt->execute();
       $n = $stmt->get_result()->fetch_assoc()['n'];
 
-      if ($n > 0) {
+            if ($n > 0) {
         $error = "That time slot overlaps with an existing reservation.";
       } else {
-        // 4. Save the reservation (status = pending until an admin approves)
-        $stmt = $conn->prepare(
-          "INSERT INTO reservations (user_id, court_id, reservation_date, start_time, end_time, purpose)
-           VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iissss", $_SESSION['user_id'], $court_id, $date, $start, $end, $purpose);
-        $stmt->execute();
-        header("Location: index.php");
-        exit;
+        // Collect the equipment the customer asked for (quantity above 0)
+        $items = [];
+        foreach (($_POST['equip'] ?? []) as $eid => $qty) {
+          if ((int)$qty > 0) { $items[(int)$eid] = (int)$qty; }
+        }
+
+        // Check there is enough stock for each item
+        foreach ($items as $eid => $qty) {
+          $stmt = $conn->prepare("SELECT equipment_name, available_qty FROM equipment WHERE equipment_id = ?");
+          $stmt->bind_param("i", $eid);
+          $stmt->execute();
+          $eq = $stmt->get_result()->fetch_assoc();
+          if (!$eq || $qty > $eq['available_qty']) {
+            $error = "Not enough " . ($eq['equipment_name'] ?? 'equipment') . " available.";
+            break;
+          }
+        }
+
+        // No problems, so save the reservation and its equipment
+        if ($error === "") {
+          $stmt = $conn->prepare(
+            "INSERT INTO reservations (user_id, court_id, reservation_date, start_time, end_time, purpose)
+             VALUES (?, ?, ?, ?, ?, ?)");
+          $stmt->bind_param("iissss", $_SESSION['user_id'], $court_id, $date, $start, $end, $purpose);
+          $stmt->execute();
+          $reservation_id = $conn->insert_id;
+
+          foreach ($items as $eid => $qty) {
+            $stmt = $conn->prepare(
+              "INSERT INTO equipment_borrowings (reservation_id, equipment_id, quantity) VALUES (?, ?, ?)");
+            $stmt->bind_param("iii", $reservation_id, $eid, $qty);
+            $stmt->execute();
+          }
+          header("Location: index.php");
+          exit;
+        }
       }
     }
   }
@@ -95,7 +123,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <label class="form-label">Purpose</label>
     <input type="text" name="purpose" class="form-control mb-3" maxlength="255">
-
+    <label class="form-label">Equipment (optional)</label>
+    <?php
+      $equip = $conn->query("SELECT equipment_id, equipment_name, available_qty, rental_fee FROM equipment");
+      while ($e = $equip->fetch_assoc()):
+    ?>
+      <div class="d-flex align-items-center mb-2">
+        <span class="flex-grow-1">
+          <?= htmlspecialchars($e['equipment_name']) ?>
+          (₱<?= number_format($e['rental_fee'], 2) ?>, <?= $e['available_qty'] ?> available)
+        </span>
+        <input type="number" name="equip[<?= $e['equipment_id'] ?>]"
+               class="form-control" style="width:80px" min="0" max="<?= $e['available_qty'] ?>" value="0">
+      </div>
+    <?php endwhile; ?>
+    
     <button class="btn btn-success w-100">Submit Request</button>
   </form>
 </div>

@@ -45,7 +45,10 @@ $pending = $conn->query(
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
     <a class="navbar-brand" href="index.php">Playbook</a>
-    <a class="btn btn-outline-light" href="logout.php">Log Out</a>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
+      <a class="btn btn-outline-light" href="logout.php">Log Out</a>
+    </div>
   </div>
 </nav>
 
