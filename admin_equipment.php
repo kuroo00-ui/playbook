@@ -50,6 +50,7 @@ $items = $conn->query("SELECT * FROM equipment ORDER BY equipment_name");
     <a class="navbar-brand" href="index.php">Playbook</a>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
+      <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
   </div>
