@@ -15,4 +15,9 @@ if (!in_array($_SESSION['role'], $roles)) {
     die("You don't have access to this page.");
     }
 }
+function notify($conn, $user_id, $message) {
+  $stmt = $conn->prepare("INSERT INTO notifications (user_id, message) VALUES (?, ?)");
+  $stmt->bind_param("is", $user_id, $message);
+  $stmt->execute();
+}
 ?>

@@ -1,30 +1,40 @@
 <?php
 include 'auth.php';
-require_role('admin');          // only admins can open this page
+require_role('admin');          
 
-// When an Approve/Reject button is clicked, the form sends a POST
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $id       = (int)$_POST['reservation_id'];
-  $decision = $_POST['decision'];            // 'approved' or 'rejected'
+  $decision = $_POST['decision'];            
 
   if (in_array($decision, ['approved', 'rejected'])) {
-    // 1. Update the reservation's status (only if it is still pending)
+    
     $stmt = $conn->prepare("UPDATE reservations SET status = ? WHERE reservation_id = ? AND status = 'pending'");
     $stmt->bind_param("si", $decision, $id);
     $stmt->execute();
 
-    // 2. If a row really changed, record who decided in the approvals table
+    
     if ($stmt->affected_rows > 0) {
       $stmt = $conn->prepare("INSERT INTO approvals (reservation_id, approver_id, decision) VALUES (?, ?, ?)");
       $stmt->bind_param("iis", $id, $_SESSION['user_id'], $decision);
       $stmt->execute();
+      $stmt = $conn->prepare(
+        "SELECT r.user_id, r.reservation_date, r.start_time, c.court_name
+         FROM reservations r JOIN courts c ON c.court_id = r.court_id
+         WHERE r.reservation_id = ?");
+      $stmt->bind_param("i", $id);
+      $stmt->execute();
+      $info = $stmt->get_result()->fetch_assoc();
+      notify($conn, $info['user_id'],
+        "Your reservation for {$info['court_name']} on {$info['reservation_date']} at "
+        . substr($info['start_time'], 0, 5) . " was $decision.");
     }
   }
-  header("Location: admin_approvals.php");   // reload the page so it can't be re-submitted
+  header("Location: admin_approvals.php");   
   exit;
 }
 
-// Get all pending reservations, with the customer and court names (JOINs)
+
 $pending = $conn->query(
   "SELECT r.*, c.court_name, u.first_name, u.last_name
    FROM reservations r

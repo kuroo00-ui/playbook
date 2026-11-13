@@ -9,10 +9,22 @@
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-4">
-  <div class="container">
+    <div class="container">
     <a class="navbar-brand" href="index.php">Playbook</a>
-    <a class="btn btn-success" href="reserve.php">Reserve a Court</a>
-    <a class="btn btn-outline-light" href="logout.php">Log Out</a>
+    <?php
+      $stmt = $conn->prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND notification_status = 'unread'");
+      $stmt->bind_param("i", $_SESSION['user_id']);
+      $stmt->execute();
+      $unread = $stmt->get_result()->fetch_assoc()['n'];
+    ?>
+    <div class="d-flex gap-2">
+      <a class="btn btn-success" href="reserve.php">Reserve a Court</a>
+      <a class="btn btn-outline-light" href="notifications.php">
+        Notifications
+        <?php if ($unread > 0): ?><span class="badge bg-danger"><?= $unread ?></span><?php endif; ?>
+      </a>
+      <a class="btn btn-outline-light" href="logout.php">Log Out</a>
+    </div>
   </div>
 </nav>
 
