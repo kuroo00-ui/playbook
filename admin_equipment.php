@@ -51,6 +51,7 @@ $items = $conn->query("SELECT * FROM equipment ORDER BY equipment_name");
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
       <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
+      <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
   </div>

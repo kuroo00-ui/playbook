@@ -13,11 +13,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // 1. Basic validation
   if ($end <= $start) {
     $error = "End time must be after start time.";
+  } elseif (substr($start, 3, 2) !== '00' || substr($end, 3, 2) !== '00') {
+    $error = "Bookings must start and end on the hour.";
   } elseif ($date < date('Y-m-d')) {
     $error = "You cannot reserve a date in the past.";
   } else {
     // 2. Court must be available and the slot inside operating hours
-    $stmt = $conn->prepare("SELECT opening_time, closing_time, status FROM courts WHERE court_id = ?");
+       $stmt = $conn->prepare("SELECT opening_time, closing_time, status, rental_rate FROM courts WHERE court_id = ?");
     $stmt->bind_param("i", $court_id);
     $stmt->execute();
     $court = $stmt->get_result()->fetch_assoc();
@@ -47,8 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Check there is enough stock for each item
+        $equip_total = 0;
         foreach ($items as $eid => $qty) {
-          $stmt = $conn->prepare("SELECT equipment_name, available_qty FROM equipment WHERE equipment_id = ?");
+          $stmt = $conn->prepare("SELECT equipment_name, available_qty, rental_fee FROM equipment WHERE equipment_id = ?");
           $stmt->bind_param("i", $eid);
           $stmt->execute();
           $eq = $stmt->get_result()->fetch_assoc();
@@ -56,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Not enough " . ($eq['equipment_name'] ?? 'equipment') . " available.";
             break;
           }
+          $equip_total += $qty * $eq['rental_fee'];
         }
 
         // No problems, so save the reservation and its equipment
@@ -73,6 +77,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("iii", $reservation_id, $eid, $qty);
             $stmt->execute();
           }
+
+          // ---- PASTE PART C HERE ----
+          $hours  = ceil((strtotime($end) - strtotime($start)) / 3600);
+          $amount = $hours * $court['rental_rate'] + $equip_total;
+          $stmt = $conn->prepare("INSERT INTO payments (reservation_id, amount) VALUES (?, ?)");
+          $stmt->bind_param("id", $reservation_id, $amount);
+          $stmt->execute();
+          // ---------------------------
+
           header("Location: index.php");
           exit;
         }
@@ -114,11 +127,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <label class="form-label">Date</label>
     <input type="date" name="reservation_date" class="form-control mb-3" min="<?= date('Y-m-d') ?>" required>
 
-    <div class="row mb-3">
-      <div class="col"><label class="form-label">Start</label>
-        <input type="time" name="start_time" class="form-control" required></div>
-      <div class="col"><label class="form-label">End</label>
-        <input type="time" name="end_time" class="form-control" required></div>
+        <div class="row mb-3">
+      <div class="col">
+        <label class="form-label">Start</label>
+        <select name="start_time" class="form-select" required>
+          <?php for ($h = 8; $h <= 20; $h++): ?>
+            <option value="<?= sprintf('%02d:00:00', $h) ?>"><?= date('g:i A', strtotime(sprintf('%02d:00', $h))) ?></option>
+          <?php endfor; ?>
+        </select>
+      </div>
+      <div class="col">
+        <label class="form-label">End</label>
+        <select name="end_time" class="form-select" required>
+          <?php for ($h = 9; $h <= 21; $h++): ?>
+            <option value="<?= sprintf('%02d:00:00', $h) ?>"><?= date('g:i A', strtotime(sprintf('%02d:00', $h))) ?></option>
+          <?php endfor; ?>
+        </select>
+      </div>
     </div>
 
     <label class="form-label">Purpose</label>

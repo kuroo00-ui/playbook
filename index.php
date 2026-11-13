@@ -46,16 +46,22 @@
     </tbody>
   </table>
 
-    <h4 class="mt-4">My Reservations</h4>
+      <h4 class="mt-4">My Reservations</h4>
   <table class="table table-bordered bg-white">
     <thead>
-      <tr><th>Court</th><th>Date</th><th>Time</th><th>Purpose</th><th>Status</th><th>Action</th></tr>
+      <tr><th>Court</th><th>Date</th><th>Time</th><th>Purpose</th><th>Equipment</th><th>Payment</th><th>Status</th><th>Action</th></tr>
     </thead>
     <tbody>
     <?php
       $stmt = $conn->prepare(
-        "SELECT r.*, c.court_name FROM reservations r
+        "SELECT r.*, c.court_name, p.amount, p.status AS payment_status,
+           (SELECT GROUP_CONCAT(CONCAT(e.equipment_name, ' x', b.quantity) SEPARATOR ', ')
+            FROM equipment_borrowings b
+            JOIN equipment e ON e.equipment_id = b.equipment_id
+            WHERE b.reservation_id = r.reservation_id) AS equipment_list
+         FROM reservations r
          JOIN courts c ON c.court_id = r.court_id
+         LEFT JOIN payments p ON p.reservation_id = r.reservation_id
          WHERE r.user_id = ? ORDER BY r.reservation_date DESC, r.start_time DESC");
       $stmt->bind_param("i", $_SESSION['user_id']);
       $stmt->execute();
@@ -67,6 +73,15 @@
         <td><?= $r['reservation_date'] ?></td>
         <td><?= substr($r['start_time'], 0, 5) ?> - <?= substr($r['end_time'], 0, 5) ?></td>
         <td><?= htmlspecialchars($r['purpose']) ?></td>
+        <td><?= htmlspecialchars($r['equipment_list'] ?? '-') ?></td>
+        <td>
+          <?php if ($r['amount'] !== null): ?>
+            ₱<?= number_format($r['amount'], 2) ?>
+            <span class="badge bg-<?= $r['payment_status'] === 'paid' ? 'success' : ($r['payment_status'] === 'refunded' ? 'secondary' : 'warning text-dark') ?>">
+              <?= $r['payment_status'] ?>
+            </span>
+          <?php else: ?>-<?php endif; ?>
+        </td>
         <td><?= $r['status'] ?></td>
         <td>
           <?php if (in_array($r['status'], ['pending', 'approved'])): ?>

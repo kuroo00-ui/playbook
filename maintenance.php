@@ -85,6 +85,7 @@ $reports   = $conn->query(
       <?php if ($_SESSION['role'] === 'admin'): ?>
         <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
         <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
+        <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
       <?php endif; ?>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>

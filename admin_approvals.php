@@ -58,6 +58,7 @@ $pending = $conn->query(
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
       <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
+      <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
   </div>
