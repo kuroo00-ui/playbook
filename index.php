@@ -77,10 +77,16 @@
         <td>
           <?php if ($r['amount'] !== null): ?>
             ₱<?= number_format($r['amount'], 2) ?>
-            <span class="badge bg-<?= $r['payment_status'] === 'paid' ? 'success' : ($r['payment_status'] === 'refunded' ? 'secondary' : 'warning text-dark') ?>">
-              <?= $r['payment_status'] ?>
-            </span>
-          <?php else: ?>-<?php endif; ?>
+            <?php
+              // Safety net: a cancelled/rejected booking never shows "pending"
+              $pay = $r['payment_status'];
+              if ($pay === 'pending' && in_array($r['status'], ['cancelled', 'rejected'])) { $pay = 'cancelled'; }
+              $badge = ['paid' => 'success', 'refunded' => 'secondary', 'cancelled' => 'secondary'][$pay] ?? 'warning text-dark';
+            ?>
+            <span class="badge bg-<?= $badge ?>"><?= $pay ?></span>
+          <?php else: ?>
+            <span class="badge bg-light text-muted border">No record</span>
+          <?php endif; ?>
         </td>
         <td><?= $r['status'] ?></td>
         <td>

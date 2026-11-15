@@ -17,6 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = $conn->prepare("UPDATE payments SET status = 'refunded' WHERE reservation_id = ? AND status = 'paid'");
     $stmt->bind_param("i", $id);
     $stmt->execute();
+
+    // A payment that was still pending is no longer owed
+    $stmt = $conn->prepare("UPDATE payments SET status = 'cancelled' WHERE reservation_id = ? AND status = 'pending'");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
   }
 }
 header("Location: index.php");
