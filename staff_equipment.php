@@ -3,6 +3,61 @@ include 'auth.php';
 require_role('staff', 'admin');
 $today = date('Y-m-d');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout') {
+  $bid = (int)$_POST['borrowing_id'];
+  $now = date('Y-m-d H:i:s');
+
+  $stmt = $conn->prepare(
+    "SELECT b.equipment_id, b.quantity, b.checkout_time,
+            r.status, r.reservation_date, e.available_qty
+     FROM equipment_borrowings b
+     JOIN reservations r ON r.reservation_id = b.reservation_id
+     JOIN equipment e    ON e.equipment_id   = b.equipment_id
+     WHERE b.borrowing_id = ?");
+  $stmt->bind_param("i", $bid);
+  $stmt->execute();
+  $b = $stmt->get_result()->fetch_assoc();
+
+    if (!$b) {
+    $_SESSION['flash'] = ['danger', 'Borrowing not found.'];
+  } elseif ($b['checkout_time'] !== null) {
+    $_SESSION['flash'] = ['warning', 'This item is already checked out.'];
+  } elseif ($b['status'] !== 'approved') {
+    $_SESSION['flash'] = ['danger', 'This reservation is no longer approved.'];
+  } elseif ($b['reservation_date'] !== $today) {
+    $_SESSION['flash'] = ['danger', 'Checkout is only allowed on the reservation date.'];
+  } elseif ($b['available_qty'] < $b['quantity']) {
+    $_SESSION['flash'] = ['danger', 'Not enough stock: ' . $b['available_qty'] . ' available, ' . $b['quantity'] . ' requested.'];
+  } else {
+        $conn->begin_transaction();
+
+    $stmt = $conn->prepare(
+      "UPDATE equipment SET available_qty = available_qty - ?
+       WHERE equipment_id = ? AND available_qty >= ?");
+    $stmt->bind_param("iii", $b['quantity'], $b['equipment_id'], $b['quantity']);
+    $stmt->execute();
+    $stock_ok = ($stmt->affected_rows === 1);
+
+    $stmt = $conn->prepare(
+      "UPDATE equipment_borrowings SET checkout_time = ?
+       WHERE borrowing_id = ? AND checkout_time IS NULL");
+    $stmt->bind_param("si", $now, $bid);
+    $stmt->execute();
+    $borrow_ok = ($stmt->affected_rows === 1);
+
+    if ($stock_ok && $borrow_ok) {
+      $conn->commit();
+      $_SESSION['flash'] = ['success', 'Item checked out.'];
+    } else {
+      $conn->rollback();
+      $_SESSION['flash'] = ['danger', 'Checkout failed. Nothing was changed.'];
+    }
+  }
+
+  header("Location: staff_equipment.php");
+  exit;
+}
+
 $stmt = $conn->prepare(
   "SELECT b.borrowing_id, b.quantity, b.checkout_time, b.return_time,
           e.equipment_name, e.available_qty,
@@ -47,12 +102,16 @@ $rows = $stmt->get_result();
 
 <div class="container">
   <h4>Equipment Checkout and Return</h4>
+      <?php if (isset($_SESSION['flash'])): ?>
+    <?php [$ftype, $ftext] = $_SESSION['flash']; unset($_SESSION['flash']); ?>
+    <div class="alert alert-<?= $ftype ?>"><?= htmlspecialchars($ftext) ?></div>
+  <?php endif; ?>
     <?php if ($rows->num_rows === 0): ?>
     <p class="text-muted">No equipment to check out or return today.</p>
   <?php else: ?>
         <table class="table table-bordered bg-white align-middle">
-      <thead>
-        <tr><th>Customer</th><th>Court</th><th>Date</th><th>Time</th><th>Item</th><th>Qty</th><th>Status</th></tr>
+            <thead>
+        <tr><th>Customer</th><th>Court</th><th>Date</th><th>Time</th><th>Item</th><th>Qty</th><th>Status</th><th>Action</th></tr>
       </thead>
       <tbody>
               <?php while ($b = $rows->fetch_assoc()): ?>
@@ -70,6 +129,15 @@ $rows = $stmt->get_result();
               <span class="badge bg-warning text-dark">Checked out</span>
             <?php else: ?>
               <span class="badge bg-info text-dark">Waiting</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <?php if (!$b['checkout_time']): ?>
+              <form method="POST" onsubmit="return confirm('Check out this item?')">
+                <input type="hidden" name="action" value="checkout">
+                <input type="hidden" name="borrowing_id" value="<?= $b['borrowing_id'] ?>">
+                <button class="btn btn-sm btn-success">Check Out</button>
+              </form>
             <?php endif; ?>
           </td>
         </tr>
