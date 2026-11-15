@@ -109,7 +109,7 @@ CREATE TABLE payments (
   amount         DECIMAL(10,2) NOT NULL,
   method         VARCHAR(30),
   payment_date   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  status         ENUM('pending','paid','refunded') NOT NULL DEFAULT 'pending',
+  status         ENUM('pending','paid','refunded','cancelled') NOT NULL DEFAULT 'pending',
   FOREIGN KEY (reservation_id) REFERENCES reservations(reservation_id)
 );
 
