@@ -1,6 +1,8 @@
 <?php
 include 'auth.php';
-require_role('admin');          // only admins can open this page
+require_role('admin');
+
+if (($_SESSION['view'] ?? 'admin') !== 'admin') { header("Location: index.php"); exit; }
 
 // When an Approve/Reject button is clicked, the form sends a POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -47,6 +49,12 @@ $pending = $conn->query(
     <a class="navbar-brand" href="index.php">Playbook</a>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
+      <a class="btn btn-outline-light" href="admin_courts.php">Courts</a>
+      <a class="btn btn-outline-light" href="admin_staff.php">Staff</a>
+
+      <a class="btn btn-outline-light" href="calendar.php">Schedule</a>
+
+      <?php include 'view_switcher.php'; ?>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
   </div>

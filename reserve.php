@@ -1,6 +1,8 @@
 <?php
 include 'auth.php';
 require_login();
+if ($_SESSION['role'] !== 'customer') { header("Location: index.php"); exit; }
+
 $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -9,6 +11,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $start    = $_POST['start_time'];
   $end      = $_POST['end_time'];
   $purpose  = trim($_POST['purpose']);
+
+  if (strlen($start) === 5) { $start .= ':00'; }
+  if (strlen($end)   === 5) { $end   .= ':00'; }
 
   // 1. Basic validation
   if ($end <= $start) {
@@ -27,13 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($start < $court['opening_time'] || $end > $court['closing_time']) {
       $error = "Outside operating hours (" . substr($court['opening_time'],0,5) . " - " . substr($court['closing_time'],0,5) . ").";
     } else {
-      // 3. Double-booking check: overlap = new_start < old_end AND new_end > old_start
-      $stmt = $conn->prepare(
-        "SELECT COUNT(*) AS n FROM reservations
-         WHERE court_id = ? AND reservation_date = ?
-           AND status IN ('pending','approved')
-           AND ? < end_time AND ? > start_time");
-      $stmt->bind_param("isss", $court_id, $date, $start, $end);
+
+        $stmt = $conn->prepare(
+        "SELECT
+           (SELECT COUNT(*) FROM reservations
+             WHERE court_id = ? AND reservation_date = ?
+               AND status IN ('pending','approved') AND ? < end_time AND ? > start_time)
+         + (SELECT COUNT(*) FROM schedules
+             WHERE court_id = ? AND schedule_date = ?
+               AND schedule_status = 'blocked' AND ? < end_time AND ? > start_time) AS n");
+      $stmt->bind_param("isssisss", $court_id, $date, $start, $end, $court_id, $date, $start, $end);
       $stmt->execute();
       $n = $stmt->get_result()->fetch_assoc()['n'];
 
@@ -102,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <form method="POST" class="bg-white p-3 border rounded">
     <label class="form-label">Court</label>
-    <select name="court_id" class="form-select mb-3" required>
+    <select name="court_id" id="court_id" class="form-select mb-3" required>
       <?php
         $courts = $conn->query("SELECT court_id, court_name FROM courts WHERE status = 'available'");
         while ($c = $courts->fetch_assoc()) {
@@ -112,17 +120,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </select>
 
     <label class="form-label">Date</label>
-    <input type="date" name="reservation_date" class="form-control mb-3" min="<?= date('Y-m-d') ?>" required>
+    <input type="date" name="reservation_date" id="reservation_date" class="form-control mb-3" min="<?= date('Y-m-d') ?>" required>
 
-    <div class="row mb-3">
-      <div class="col"><label class="form-label">Start</label>
-        <input type="time" name="start_time" class="form-control" required></div>
-      <div class="col"><label class="form-label">End</label>
-        <input type="time" name="end_time" class="form-control" required></div>
+    <div class="row mb-1">
+      <div class="col">
+        <label class="form-label">Start</label>
+        <div class="input-group">
+          <select id="start_h" class="form-select" required></select>
+          <select id="start_m" class="form-select" required></select>
+        </div>
+      </div>
+      <div class="col">
+        <label class="form-label">End</label>
+        <div class="input-group">
+          <select id="end_h" class="form-select" required></select>
+          <select id="end_m" class="form-select" required></select>
+        </div>
+      </div>
     </div>
+    <input type="hidden" name="start_time" id="start_time">
+    <input type="hidden" name="end_time" id="end_time">
+    <div id="slotInfo" class="form-text mb-3">Choose a court and date to see available hours.</div>
 
     <label class="form-label">Purpose</label>
     <input type="text" name="purpose" class="form-control mb-3" maxlength="255">
+
     <label class="form-label">Equipment (optional)</label>
     <?php
       $equip = $conn->query("SELECT equipment_id, equipment_name, available_qty, rental_fee FROM equipment");
@@ -137,9 +159,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                class="form-control" style="width:80px" min="0" max="<?= $e['available_qty'] ?>" value="0">
       </div>
     <?php endwhile; ?>
-    
+
     <button class="btn btn-success w-100">Submit Request</button>
   </form>
 </div>
+
+<script>
+const courtEl = document.getElementById('court_id');
+const dateEl  = document.getElementById('reservation_date');
+const sh = document.getElementById('start_h'), sm = document.getElementById('start_m');
+const eh = document.getElementById('end_h'),   em = document.getElementById('end_m');
+const startEl = document.getElementById('start_time');
+const endEl   = document.getElementById('end_time');
+const infoEl  = document.getElementById('slotInfo');
+let slots = null, earliest = 0;
+
+const pad = n => String(n).padStart(2, '0');
+const fmt = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+
+function fillSelect(el, items, placeholder) {
+  const prev = el.value;
+  el.innerHTML = '<option value="">' + placeholder + '</option>' +
+    items.map(v => `<option value="${v}">${pad(v)}</option>`).join('');
+  if (items.map(String).includes(prev)) el.value = prev;
+}
+
+// lo and hi are minutes since midnight; the lists only contain times from lo to hi
+function build(hEl, mEl, lo, hi) {
+  const hours = [];
+  for (let h = Math.floor(lo / 60); h <= Math.floor(hi / 60); h++) hours.push(h);
+  fillSelect(hEl, hours, 'HH');
+
+  const mins = [];
+  if (hEl.value !== '') {
+    const h = +hEl.value;
+    const from = (h === Math.floor(lo / 60)) ? lo % 60 : 0;
+    const to   = (h === Math.floor(hi / 60)) ? hi % 60 : 59;
+    for (let m = from; m <= to; m++) mins.push(m);
+  }
+  fillSelect(mEl, mins, 'MM');
+}
+
+function refresh() {
+  em.setCustomValidity('');
+  if (!slots || slots.error) { startEl.value = endEl.value = ''; return; }
+
+  const lo = Math.max(slots.open, earliest);
+
+  // Start: from the opening time up to one minute before closing
+  build(sh, sm, lo, slots.close - 1);
+  const s = (sh.value !== '' && sm.value !== '') ? (+sh.value) * 60 + (+sm.value) : null;
+
+  // End: after the chosen start, up to the closing time
+  build(eh, em, (s !== null ? s + 1 : lo + 1), slots.close);
+  const e = (eh.value !== '' && em.value !== '') ? (+eh.value) * 60 + (+em.value) : null;
+
+  startEl.value = s !== null ? fmt(s) + ':00' : '';
+  endEl.value   = e !== null ? fmt(e) + ':00' : '';
+
+  if (s !== null && e !== null && slots.booked.some(([bs, be]) => s < be && e > bs)) {
+    em.setCustomValidity('That time overlaps an existing booking.');
+  }
+}
+
+async function loadSlots() {
+  slots = null;
+  if (!courtEl.value || !dateEl.value) { refresh(); return; }
+
+  const res = await fetch(`get_slots.php?court_id=${courtEl.value}&date=${dateEl.value}`);
+  slots = await res.json();
+  if (slots.error) { infoEl.textContent = 'That court is not available.'; refresh(); return; }
+
+  // For today, times that already passed are not offered
+  const now = new Date();
+  earliest = (dateEl.value === now.toLocaleDateString('en-CA')) ? now.getHours() * 60 + now.getMinutes() : 0;
+
+  let text = `Open ${fmt(slots.open)} to ${fmt(slots.close)}.`;
+  if (slots.booked.length) {
+    text += ' Not available: ' + slots.booked
+      .sort((a, b) => a[0] - b[0])
+      .map(([s, e]) => fmt(s) + '-' + fmt(e)).join(', ') + '.';
+  }
+  infoEl.textContent = text;
+  refresh();
+}
+
+[sh, sm, eh, em].forEach(el => el.addEventListener('change', () => {
+  refresh();
+  if (el === em && !em.checkValidity()) em.reportValidity();
+}));
+courtEl.addEventListener('change', loadSlots);
+dateEl.addEventListener('change', loadSlots);
+refresh();
+loadSlots();
+</script>
 </body>
 </html>

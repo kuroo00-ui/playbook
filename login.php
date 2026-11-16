@@ -14,15 +14,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $stmt->execute();
   $user = $stmt->get_result()->fetch_assoc();
 
-  if ($user && password_verify($pass, $user['password_hash'])) {
+    if ($user && password_verify($pass, $user['password_hash'])) {
 
-    
     session_regenerate_id(true);
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['role']    = $user['role'];
     $_SESSION['name']    = $user['first_name'];
 
-   
+    $_SESSION['view']    = $user['role'];
+
     if ($user['role'] === 'admin') {
       header("Location: admin_approvals.php");
     } elseif ($user['role'] === 'staff') {
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 
   } else {
-    $error = "Invalid email or password.";
+      $error = "Invalid email or password.";
   }
 }
 ?>

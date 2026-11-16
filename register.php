@@ -1,15 +1,16 @@
 <?php 
 include 'connect.php';
-$error="";
-if ($_SERVER['REQUEST_METHOD']==='POST') {
-    $first = trim($_POST['first_name']);
+$error = "";
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $first   = trim($_POST['first_name']);
     $last    = trim($_POST['last_name']);
     $email   = trim($_POST['email']);
     $contact = trim($_POST['contact_number']);
-    $pass = $_POST['password'];
+    $pass    = $_POST['password'];
     $confirm = $_POST['confirm_password'];
 
-    if ($pass === '' || $pass !== $confirm){
+    if ($pass === '' || $pass !== $confirm) {
         $error = "Passwords must match and not be empty.";
     } else {
         $stmt = $conn->prepare("SELECT user_id FROM users WHERE email=?");
@@ -17,12 +18,13 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $stmt->execute();
         $stmt->store_result();
 
-        if ($stmt->num_rows > 0){
+        if ($stmt->num_rows > 0) {
             $error = "That email is already registered.";
-        }else {
+        } else {
             $hash = password_hash($pass, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("INSERT INTO users (first_name, last_name, email, contact_number, password_hash, role)
-                              VALUES (?, ?, ?, ?, ?, 'customer')");
+            $stmt = $conn->prepare(
+                "INSERT INTO users (first_name, last_name, email, contact_number, password_hash, role)
+                 VALUES (?, ?, ?, ?, ?, 'customer')");
             $stmt->bind_param("sssss", $first, $last, $email, $contact, $hash);
             $stmt->execute();
 
@@ -47,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
 </nav>
 
 <div class="container" style="max-width:480px">
-  <h4>Create an Account</h4>
+  <h4>Create a Customer Account</h4>
 
   <?php if ($error): ?>
     <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
