@@ -18,7 +18,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total = (int)$_POST['total_quantity'];
     $fee   = (float)$_POST['rental_fee'];
     $cond  = $_POST['equipment_condition'];
-    if (in_array($cond, ['good', 'fair', 'damaged'])) {
+
+    $stmt = $conn->prepare("SELECT total_quantity, available_qty FROM equipment WHERE equipment_id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $cur = $stmt->get_result()->fetch_assoc();
+    $away = $cur ? $cur['total_quantity'] - $cur['available_qty'] : 0;
+
+    if ($cur && $total < $away) {
+      $_SESSION['flash'] = ['danger', "Total can't go below $away: that many are checked out, under repair or missing."];
+    } elseif ($cur && in_array($cond, ['good', 'fair', 'damaged'])) {
       // available_qty is adjusted by the change in total. MySQL reads the SET
       // list left to right, so available_qty must come BEFORE total_quantity.
       $stmt = $conn->prepare(
@@ -58,6 +67,10 @@ $items = $conn->query("SELECT * FROM equipment ORDER BY equipment_name");
 </nav>
 
 <div class="container">
+    <?php if (isset($_SESSION['flash'])): ?>
+    <?php [$ftype, $ftext] = $_SESSION['flash']; unset($_SESSION['flash']); ?>
+    <div class="alert alert-<?= $ftype ?>"><?= htmlspecialchars($ftext) ?></div>
+  <?php endif; ?>
   <h4>Add Equipment</h4>
   <form method="POST" class="row g-2 bg-white p-3 border rounded mb-4">
     <input type="hidden" name="action" value="add">
