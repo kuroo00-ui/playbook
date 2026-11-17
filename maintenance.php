@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     [$type, $id] = array_pad(explode(':', $_POST['item']), 2, 0);
     $id    = (int)$id;
     $issue = trim($_POST['issue']);
+    $qty   = (int)($_POST['qty'] ?? 1);
 
     if ($issue !== '' && in_array($type, ['court', 'equipment'])) {
       if ($type === 'court') {
@@ -19,39 +20,171 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare("UPDATE courts SET status = 'maintenance' WHERE court_id = ?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
-      } else {
-        $stmt = $conn->prepare("INSERT INTO maintenance_reports (equipment_id, reported_by, issue) VALUES (?, ?, ?)");
-        $stmt->bind_param("iis", $id, $_SESSION['user_id'], $issue);
-        $stmt->execute();
-        $stmt = $conn->prepare("UPDATE equipment SET equipment_condition = 'damaged' WHERE equipment_id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
+        notify_admins($conn, 'Court reported broken: ' . $issue);
+      } else {        
+        if ($qty < 1) {
+          $_SESSION['flash'] = ['danger', 'Enter how many units are broken.'];
+        } else {
+          $conn->begin_transaction();
+
+          $stmt = $conn->prepare(
+            "UPDATE equipment
+             SET available_qty = available_qty - ?, equipment_condition = 'damaged'
+             WHERE equipment_id = ? AND available_qty >= ?");
+          $stmt->bind_param("iii", $qty, $id, $qty);
+          $stmt->execute();
+
+          if ($stmt->affected_rows === 1) {
+            $stmt = $conn->prepare(
+              "INSERT INTO maintenance_reports (equipment_id, qty_damaged, reported_by, issue)
+               VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("iiis", $id, $qty, $_SESSION['user_id'], $issue);
+            $stmt->execute();
+            notify_admins($conn, 'Equipment reported broken (' . $qty . ' units): ' . $issue);
+            $conn->commit();
+          } else {
+            $conn->rollback();
+            $_SESSION['flash'] = ['danger', 'Not enough units on the shelf to report that many.'];
+          }
+        }
       }
     }
 
   // ----- Mark a report as fixed -----
+   // ----- Mark a report as fixed -----
   } elseif ($_POST['action'] === 'fixed') {
-    $rid = (int)$_POST['report_id'];
 
-    // Find the report (only if it is not already fixed)
-    $stmt = $conn->prepare("SELECT court_id, equipment_id FROM maintenance_reports WHERE report_id = ? AND repair_status <> 'fixed'");
+    // Read the report
+    $rid = (int)$_POST['report_id'];
+    $n   = (int)($_POST['qty_fixed'] ?? 0);
+
+    $stmt = $conn->prepare(
+      "SELECT court_id, equipment_id, qty_damaged, qty_fixed
+       FROM maintenance_reports
+       WHERE report_id = ? AND repair_status <> 'fixed'"
+    );
     $stmt->bind_param("i", $rid);
     $stmt->execute();
     $rep = $stmt->get_result()->fetch_assoc();
 
     if ($rep) {
-      $stmt = $conn->prepare("UPDATE maintenance_reports SET repair_status = 'fixed' WHERE report_id = ?");
-      $stmt->bind_param("i", $rid);
-      $stmt->execute();
 
-      if ($rep['court_id']) {
-        $stmt = $conn->prepare("UPDATE courts SET status = 'available' WHERE court_id = ?");
-        $stmt->bind_param("i", $rep['court_id']);
-      } else {
-        $stmt = $conn->prepare("UPDATE equipment SET equipment_condition = 'good' WHERE equipment_id = ?");
-        $stmt->bind_param("i", $rep['equipment_id']);
+      // Calculate remaining broken quantity
+      $counted = ($rep['qty_damaged'] !== null);
+
+      $left = $counted
+        ? (int)$rep['qty_damaged'] - (int)$rep['qty_fixed']
+        : 0;
+
+      if (!$counted) {
+        $n = 0;
       }
-      $stmt->execute();
+
+      // Validate repair quantity
+      if ($counted && ($n < 1 || $n > $left)) {
+
+        $_SESSION['flash'] = [
+          'danger',
+          "Fixed quantity must be between 1 and $left."
+        ];
+
+      } else {
+
+        $done   = ($n === $left);
+        $status = $done ? 'fixed' : 'in_repair';
+
+        $conn->begin_transaction();
+
+        // Update maintenance report
+        $stmt = $conn->prepare(
+          "UPDATE maintenance_reports
+           SET qty_fixed = qty_fixed + ?, repair_status = ?
+           WHERE report_id = ?
+           AND repair_status <> 'fixed'
+           AND qty_fixed = ?"
+        );
+
+        $stmt->bind_param(
+          "isii",
+          $n,
+          $status,
+          $rid,
+          $rep['qty_fixed']
+        );
+
+        $stmt->execute();
+
+        $ok = ($stmt->affected_rows === 1);
+
+        // Return repaired equipment to available inventory
+        if ($ok && $rep['court_id']) {
+
+          $stmt = $conn->prepare(
+            "UPDATE courts
+             SET status = 'available'
+             WHERE court_id = ?"
+          );
+
+          $stmt->bind_param("i", $rep['court_id']);
+          $ok = $stmt->execute();
+
+        } elseif ($ok && $counted) {
+
+          $stmt = $conn->prepare(
+            "UPDATE equipment
+             SET available_qty = available_qty + ?
+             WHERE equipment_id = ?"
+          );
+
+          $stmt->bind_param(
+            "ii",
+            $n,
+            $rep['equipment_id']
+          );
+
+          $ok = $stmt->execute();
+
+          // Update condition only after the final repair
+          if ($ok && $done) {
+
+            $stmt = $conn->prepare(
+              "UPDATE equipment
+               SET equipment_condition = 'good'
+               WHERE equipment_id = ?"
+            );
+
+            $stmt->bind_param("i", $rep['equipment_id']);
+            $ok = $stmt->execute();
+          }
+        }
+
+        // Commit or rollback transaction
+        if ($ok) {
+
+          $conn->commit();
+
+          $_SESSION['flash'] = [
+            'success',
+            $counted
+              ? "$n unit(s) successfully repaired and returned to available inventory."
+              : "Maintenance report marked as fixed."
+          ];
+
+        } else {
+
+          $conn->rollback();
+
+          $_SESSION['flash'] = [
+            'warning',
+            'This report changed or the update failed. Refresh and try again.'
+          ];
+        }
+      }
+    } else {
+      $_SESSION['flash'] = [
+        'warning',
+        'This report is already fixed.'
+      ];
     }
   }
   header("Location: maintenance.php");
@@ -93,6 +226,10 @@ $reports   = $conn->query(
 </nav>
 
 <div class="container">
+    <?php if (isset($_SESSION['flash'])): ?>
+    <?php [$ftype, $ftext] = $_SESSION['flash']; unset($_SESSION['flash']); ?>
+    <div class="alert alert-<?= $ftype ?>"><?= htmlspecialchars($ftext) ?></div>
+  <?php endif; ?>
   <h4>Report a Problem</h4>
   <form method="POST" class="row g-2 bg-white p-3 border rounded mb-4">
     <input type="hidden" name="action" value="report">
@@ -110,22 +247,41 @@ $reports   = $conn->query(
         </optgroup>
       </select>
     </div>
-    <div class="col-md-6">
-      <input type="text" name="issue" class="form-control" placeholder="What is broken? (e.g. torn net, flat ball)" maxlength="255" required>
-    </div>
+    <div class="col-md-4">
+  <input type="text" name="issue" class="form-control" placeholder="What is broken? (e.g. torn net, flat ball)" maxlength="255" required>
+</div>
+
+<div class="col-md-2">
+  <input type="number" name="qty" value="1" min="1" class="form-control" title="How many units (equipment only)">
+</div>
     <div class="col-md-2"><button class="btn btn-danger w-100">Report Broken</button></div>
   </form>
 
   <h4>Maintenance Reports</h4>
   <table class="table table-bordered bg-white align-middle">
     <thead>
-      <tr><th>Item</th><th>Problem</th><th>Reported by</th><th>Date</th><th>Status</th><th></th></tr>
+      <tr>
+  <th>Item</th>
+  <th>Problem</th>
+  <th>Qty</th>
+  <th>Reported by</th>
+  <th>Date</th>
+  <th>Status</th>
+  <th></th>
+</tr>
     </thead>
     <tbody>
     <?php while ($r = $reports->fetch_assoc()): ?>
       <tr>
         <td><?= htmlspecialchars($r['court_name'] ?? $r['equipment_name']) ?></td>
         <td><?= htmlspecialchars($r['issue']) ?></td>
+        <td>
+  <?php if ($r['qty_damaged'] !== null): ?>
+    <?= (int)$r['qty_fixed'] ?> of <?= (int)$r['qty_damaged'] ?> fixed
+  <?php else: ?>
+    -
+  <?php endif; ?>
+</td>
         <td><?= htmlspecialchars($r['first_name']) ?></td>
         <td><?= substr($r['date_reported'], 0, 10) ?></td>
         <td>
@@ -137,9 +293,14 @@ $reports   = $conn->query(
         </td>
         <td>
           <?php if ($r['repair_status'] !== 'fixed'): ?>
-            <form method="POST">
+            <form method="POST" class="d-flex gap-1">
               <input type="hidden" name="action" value="fixed">
               <input type="hidden" name="report_id" value="<?= $r['report_id'] ?>">
+              <?php if ($r['qty_damaged'] !== null): ?>
+                <input type="number" name="qty_fixed" value="1" min="1"
+                       max="<?= $r['qty_damaged'] - $r['qty_fixed'] ?>"
+                       class="form-control form-control-sm" style="width:70px">
+              <?php endif; ?>
               <button class="btn btn-success btn-sm">Mark Fixed</button>
             </form>
           <?php endif; ?>

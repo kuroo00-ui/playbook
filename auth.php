@@ -20,4 +20,10 @@ function notify($conn, $user_id, $message) {
   $stmt->bind_param("is", $user_id, $message);
   $stmt->execute();
 }
+function notify_admins($conn, $message) {
+  $admins = $conn->query("SELECT user_id FROM users WHERE role = 'admin'");
+  while ($a = $admins->fetch_assoc()) {
+    notify($conn, $a['user_id'], $message);
+  }
+}
 ?>

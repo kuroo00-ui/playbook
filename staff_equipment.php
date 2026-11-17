@@ -108,10 +108,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retur
         if ($ok && $cond === 'damaged') {
       $issue = 'Returned damaged: ' . $qret . ' of ' . $b['quantity'] . ' (borrowing #' . $bid . ')';
       $stmt = $conn->prepare(
-        "INSERT INTO maintenance_reports (equipment_id, reported_by, issue) VALUES (?, ?, ?)");
-      $stmt->bind_param("iis", $b['equipment_id'], $_SESSION['user_id'], $issue);
+        "INSERT INTO maintenance_reports (equipment_id, qty_damaged, reported_by, issue)
+         VALUES (?, ?, ?, ?)");
+      $stmt->bind_param("iiis", $b['equipment_id'], $qret, $_SESSION['user_id'], $issue);
       $stmt->execute();
       $ok = ($stmt->affected_rows === 1);
+            notify_admins($conn, 'Equipment returned damaged: ' . $issue);
 
       $stmt = $conn->prepare(
         "UPDATE equipment SET equipment_condition = 'damaged' WHERE equipment_id = ?");
