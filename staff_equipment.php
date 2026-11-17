@@ -58,8 +58,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
   exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'return') {
+  $bid  = (int)$_POST['borrowing_id'];
+  $qret = (int)$_POST['qty_returned'];
+  $cond = $_POST['return_condition'] ?? '';
+  $now  = date('Y-m-d H:i:s');
+
+  if ($cond === 'missing') {
+    $qret = 0;
+  }
+
+  $stmt = $conn->prepare(
+    "SELECT equipment_id, quantity, checkout_time, return_time
+     FROM equipment_borrowings WHERE borrowing_id = ?");
+  $stmt->bind_param("i", $bid);
+  $stmt->execute();
+  $b = $stmt->get_result()->fetch_assoc();
+
+    if (!$b) {
+    $_SESSION['flash'] = ['danger', 'Borrowing not found.'];
+  } elseif ($b['checkout_time'] === null) {
+    $_SESSION['flash'] = ['danger', 'This item was never checked out.'];
+  } elseif ($b['return_time'] !== null) {
+    $_SESSION['flash'] = ['warning', 'This item is already returned.'];
+  } elseif (!in_array($cond, ['good', 'fair', 'damaged', 'missing'], true)) {
+    $_SESSION['flash'] = ['danger', 'Choose a condition.'];
+  } elseif ($cond !== 'missing' && ($qret < 1 || $qret > $b['quantity'])) {
+    $_SESSION['flash'] = ['danger', 'Returned quantity must be between 1 and ' . $b['quantity'] . '.'];
+  } else {
+
+      $conn->begin_transaction();
+
+    $stmt = $conn->prepare(
+      "UPDATE equipment_borrowings
+       SET qty_returned = ?, return_condition = ?, return_time = ?
+       WHERE borrowing_id = ? AND return_time IS NULL");
+    $stmt->bind_param("issi", $qret, $cond, $now, $bid);
+    $stmt->execute();
+    $ok = ($stmt->affected_rows === 1);
+
+        if ($ok && in_array($cond, ['good', 'fair'], true)) {
+      $stmt = $conn->prepare(
+        "UPDATE equipment SET available_qty = available_qty + ? WHERE equipment_id = ?");
+      $stmt->bind_param("ii", $qret, $b['equipment_id']);
+      $stmt->execute();
+      $ok = ($stmt->affected_rows === 1);
+    }
+
+        if ($ok && $cond === 'damaged') {
+      $issue = 'Returned damaged: ' . $qret . ' of ' . $b['quantity'] . ' (borrowing #' . $bid . ')';
+      $stmt = $conn->prepare(
+        "INSERT INTO maintenance_reports (equipment_id, reported_by, issue) VALUES (?, ?, ?)");
+      $stmt->bind_param("iis", $b['equipment_id'], $_SESSION['user_id'], $issue);
+      $stmt->execute();
+      $ok = ($stmt->affected_rows === 1);
+
+      $stmt = $conn->prepare(
+        "UPDATE equipment SET equipment_condition = 'damaged' WHERE equipment_id = ?");
+      $stmt->bind_param("i", $b['equipment_id']);
+      $stmt->execute();
+    }
+
+        if ($ok) {
+      $conn->commit();
+      $_SESSION['flash'] = ['success', 'Return recorded.'];
+    } else {
+      $conn->rollback();
+      $_SESSION['flash'] = ['danger', 'Return failed. Nothing was changed.'];
+    }
+  }
+
+  header("Location: staff_equipment.php");
+  exit;
+}
+
 $stmt = $conn->prepare(
-  "SELECT b.borrowing_id, b.quantity, b.checkout_time, b.return_time,
+    "SELECT b.borrowing_id, b.quantity, b.checkout_time, b.return_time,
+          b.qty_returned, b.return_condition,
           e.equipment_name, e.available_qty,
           r.reservation_date, r.start_time, r.end_time,
           c.court_name, u.first_name, u.last_name
@@ -131,13 +206,30 @@ $rows = $stmt->get_result();
               <span class="badge bg-info text-dark">Waiting</span>
             <?php endif; ?>
           </td>
-          <td>
+                    <td>
             <?php if (!$b['checkout_time']): ?>
               <form method="POST" onsubmit="return confirm('Check out this item?')">
                 <input type="hidden" name="action" value="checkout">
                 <input type="hidden" name="borrowing_id" value="<?= $b['borrowing_id'] ?>">
                 <button class="btn btn-sm btn-success">Check Out</button>
               </form>
+            <?php elseif (!$b['return_time']): ?>
+              <form method="POST" class="d-flex gap-1" onsubmit="return confirm('Record this return?')">
+                <input type="hidden" name="action" value="return">
+                <input type="hidden" name="borrowing_id" value="<?= $b['borrowing_id'] ?>">
+                <input type="number" name="qty_returned" value="<?= $b['quantity'] ?>"
+                       min="0" max="<?= $b['quantity'] ?>" class="form-control form-control-sm" style="width:70px">
+                <select name="return_condition" class="form-select form-select-sm" required>
+                  <option value="">Condition</option>
+                  <option value="good">good</option>
+                  <option value="fair">fair</option>
+                  <option value="damaged">damaged</option>
+                  <option value="missing">missing</option>
+                </select>
+                <button class="btn btn-sm btn-primary">Return</button>
+              </form>
+            <?php else: ?>
+              <?= $b['qty_returned'] ?> of <?= $b['quantity'] ?> back, <?= htmlspecialchars($b['return_condition']) ?>
             <?php endif; ?>
           </td>
         </tr>
