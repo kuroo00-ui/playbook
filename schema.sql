@@ -118,6 +118,8 @@ CREATE TABLE maintenance_reports (
   report_id     INT AUTO_INCREMENT PRIMARY KEY,
   court_id      INT NULL,
   equipment_id  INT NULL,
+  qty_damaged   INT NULL, 
+  qty_fixed     INT NOT NULL DEFAULT 0,  
   reported_by   INT NOT NULL,
   issue         VARCHAR(255) NOT NULL,
   date_reported TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
