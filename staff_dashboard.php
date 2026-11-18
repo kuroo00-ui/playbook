@@ -225,7 +225,7 @@ $isAdmin = $currentUser['role'] === 'admin';
 // Empty values display an unavailable menu item instead of a broken link.
 // Destination pages keep their own access checks; this does not grant roles.
 $menuLinks = [
-    'Equipment' => $isAdmin ? 'admin_equipment.php' : '',
+    'Maintenance' => 'maintenance.php',
 ];
 ?>
 <!DOCTYPE html>

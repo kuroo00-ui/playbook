@@ -219,6 +219,8 @@ $reports   = $conn->query(
         <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
         <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
         <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
+      <?php else: ?>
+        <a class="btn btn-outline-light" href="staff_dashboard.php">Dashboard</a>
       <?php endif; ?>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
