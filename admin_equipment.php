@@ -56,11 +56,12 @@ $items = $conn->query("SELECT * FROM equipment ORDER BY equipment_name");
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
-    <a class="navbar-brand" href="index.php">Playbook</a>
+    <a class="navbar-brand" href="<?= home_url() ?>">Playbook</a>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
       <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
       <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
+      <a class="btn btn-outline-light" href="admin_courts.php">Courts</a>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
   </div>

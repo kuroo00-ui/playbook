@@ -225,7 +225,8 @@ $isAdmin = $currentUser['role'] === 'admin';
 // Empty values display an unavailable menu item instead of a broken link.
 // Destination pages keep their own access checks; this does not grant roles.
 $menuLinks = [
-    'Equipment' => $isAdmin ? 'admin_equipment.php' : '',
+    'Equipment Checkout' => 'staff_equipment.php',
+    'Maintenance'        => 'maintenance.php',
 ];
 ?>
 <!DOCTYPE html>
@@ -322,7 +323,7 @@ form { margin: 0; }
 <body data-viewing-today="<?= $selectedDate === $today ? '1' : '0' ?>" data-auto-refresh="<?= $method === 'GET' && !$errors ? '1' : '0' ?>">
   <header class="navbar">
     <nav class="container" aria-label="Staff navigation">
-      <a class="brand" href="staff_dashboard.php">Playbook</a>
+      <a class="brand" href="<?= home_url() ?>">Playbook</a>
       <div class="nav-links">
         <?php foreach ($menuLinks as $label => $link): ?>
           <?php if ($link !== ''): ?>

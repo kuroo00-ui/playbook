@@ -24,9 +24,13 @@ $stmt->execute();
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
-    <a class="navbar-brand" href="index.php">Playbook</a>
-    <a class="btn btn-outline-light" href="logout.php">Log Out</a>
-  </div>
+    <a class="navbar-brand" href="<?= home_url() ?>">Playbook</a>
+<div class="d-flex gap-2">
+  <?php if ($_SESSION['role'] !== 'customer'): ?>
+    <a class="btn btn-outline-light" href="<?= home_url() ?>">Back</a>
+  <?php endif; ?>
+  <a class="btn btn-outline-light" href="logout.php">Log Out</a>
+</div>
 </nav>
 
 <div class="container" style="max-width:700px">

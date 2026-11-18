@@ -71,7 +71,11 @@ function hour_options($sel) {
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
+<<<<<<< HEAD
     <a class="navbar-brand" href="index.php">Playbook</a>
+=======
+    <a class="navbar-brand" href="<?= home_url() ?>">Playbook</a>
+>>>>>>> 7e3adea (added the court and tested)
     <div class="d-flex gap-2">
       <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
       <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
@@ -148,4 +152,8 @@ function hour_options($sel) {
   </div>
 </div>
 </body>
+<<<<<<< HEAD
 </html>
+=======
+</html>
+>>>>>>> 7e3adea (added the court and tested)

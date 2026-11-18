@@ -164,7 +164,7 @@ $rows = $stmt->get_result();
 
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
-    <a class="navbar-brand" href="index.php">Playbook</a>
+    <a class="navbar-brand" href="<?= home_url() ?>">Playbook</a>
     <div class="d-flex gap-2">
       <?php if ($_SESSION['role'] === 'admin'): ?>
         <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>

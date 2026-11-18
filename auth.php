@@ -8,6 +8,12 @@ function require_login() {
     }
 }
 
+function home_url() {
+  if (($_SESSION['role'] ?? '') === 'admin') return 'admin_approvals.php';
+  if (($_SESSION['role'] ?? '') === 'staff') return 'staff_dashboard.php';
+  return 'index.php';
+}
+
 function require_role(...$roles){
 require_login();
 if (!in_array($_SESSION['role'], $roles)) {

@@ -213,12 +213,16 @@ $reports   = $conn->query(
 <body class="bg-light">
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
-    <a class="navbar-brand" href="index.php">Playbook</a>
+    <a class="navbar-brand" href="<?= home_url() ?>">Playbook</a>
     <div class="d-flex gap-2">
-      <?php if ($_SESSION['role'] === 'admin'): ?>
+            <?php if ($_SESSION['role'] === 'admin'): ?>
         <a class="btn btn-outline-light" href="admin_approvals.php">Approvals</a>
         <a class="btn btn-outline-light" href="admin_equipment.php">Equipment</a>
         <a class="btn btn-outline-light" href="admin_payments.php">Payments</a>
+        <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
+      <?php else: ?>
+        <a class="btn btn-outline-light" href="staff_dashboard.php">Dashboard</a>
+        <a class="btn btn-outline-light" href="maintenance.php">Maintenance</a>
       <?php endif; ?>
       <a class="btn btn-outline-light" href="logout.php">Log Out</a>
     </div>
