@@ -18,6 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt = $conn->prepare("INSERT INTO approvals (reservation_id, approver_id, decision) VALUES (?, ?, ?)");
       $stmt->bind_param("iis", $id, $_SESSION['user_id'], $decision);
       $stmt->execute();
+
+      // A rejected booking owes nothing, so void its pending payment
+      if ($decision === 'rejected') {
+        $stmt = $conn->prepare("UPDATE payments SET status = 'cancelled' WHERE reservation_id = ? AND status = 'pending'");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+      }
       $stmt = $conn->prepare(
         "SELECT r.user_id, r.reservation_date, r.start_time, c.court_name
          FROM reservations r JOIN courts c ON c.court_id = r.court_id
