@@ -29,6 +29,10 @@
 </nav>
 
 <div class="container">
+  <?php if (!empty($_SESSION['flash_reservation'])): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($_SESSION['flash_reservation']) ?></div>
+    <?php unset($_SESSION['flash_reservation']); ?>
+  <?php endif; ?>
   <h4>Available Courts</h4>
   <table class="table table-bordered bg-white">
     <thead><tr><th>Court</th><th>Capacity</th><th>Hours</th><th>Rate</th><th>Status</th></tr></thead>
@@ -91,10 +95,15 @@
         <td><?= $r['status'] ?></td>
         <td>
           <?php if (in_array($r['status'], ['pending', 'approved'])): ?>
-            <form method="POST" action="cancel.php" onsubmit="return confirm('Cancel this reservation?')">
-              <input type="hidden" name="reservation_id" value="<?= $r['reservation_id'] ?>">
-              <button class="btn btn-danger btn-sm">Cancel</button>
-            </form>
+            <div class="d-flex gap-2">
+              <?php if ($r['reservation_date'] >= date('Y-m-d')): ?>
+                <a class="btn btn-outline-primary btn-sm" href="edit_reservation.php?id=<?= $r['reservation_id'] ?>">Reschedule</a>
+              <?php endif; ?>
+              <form method="POST" action="cancel.php" onsubmit="return confirm('Cancel this reservation?')">
+                <input type="hidden" name="reservation_id" value="<?= $r['reservation_id'] ?>">
+                <button class="btn btn-danger btn-sm">Cancel</button>
+              </form>
+            </div>
           <?php endif; ?>
         </td>
       </tr>
